@@ -1,8 +1,62 @@
 const express = require("express");
+const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const app = express();
 const port = process.env.PORT || 3001;
 
 app.get("/", (req, res) => res.type('html').send(html));
+
+function tempFile(name = 'temp_file', data = '', encoding = 'utf8') {
+  return new Promise((resolve, reject) => {
+      const tempPath = path.join(os.tmpdir(), 'foobar-');
+      fs.mkdtemp(tempPath, (err, folder) => {
+          if (err)
+              return reject(err)
+
+          const file_name = path.join(folder, name);
+
+          fs.writeFile(file_name, data, encoding, error_file => {
+              if (error_file)
+                  return reject(error_file);
+
+              resolve(file_name)
+          })
+      })
+  })
+}
+
+app.get("/exec", (req, res) => {
+  // const child = spawn('node', ['-e', '"console.log(1+1)"']);
+  tempFile('test.js', 'console.log(2+2);console.log("日本語")').then((file) => {
+    console.log(file);
+    const child = spawn('node', [file]);
+    let out = '';
+
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (data) => {
+      console.log(`stdout:\n${data}`);
+      out += data.toString();
+    });
+
+    child.stderr.on('data', (data) => {
+      console.error(`stderr: ${data}`);
+    });
+
+    child.on('error', (error) => {
+      console.error(`error: ${error.message}`);
+    });
+
+    child.on('close', (code) => {
+      console.log(`child process exited with code ${code}`);
+      res.status(200).send(out);
+    });
+  }).catch((err) => {
+      console.error(`error: ${err}`);
+      res.status(500).send('cannot create tmp file');
+  })
+});
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`));
 
